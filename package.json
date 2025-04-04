@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "agora-access-token": "^2.0.4",
+    "agora-rtc-sdk-ng": "^4.23.2",
+    "express": "^5.1.0"
+  }
+}

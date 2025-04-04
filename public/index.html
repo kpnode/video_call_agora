@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agora Video Call</title>
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.11.0.js"></script>
+  <style>
+    #local-stream, #remote-streams {
+      width: 400px;
+      height: 300px;
+      border: 1px solid black;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="local-stream"></div>
+  <div id="remote-streams"></div>
+  <button id="join">Join Call</button>
+
+  <script>
+    const APP_ID = "e45b4a04aa0045a7ab86e68f56f6974c"; // Define APP_ID here
+    const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+
+    let localTrack;
+
+    document.getElementById('join').onclick = async () => {
+      const channel = "test";
+      const uid = Math.floor(Math.random() * 10000);
+
+      // Request permission for audio and video
+      try {
+        await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        console.log("Camera and microphone are accessible");
+      } catch (err) {
+        console.error("Camera or microphone not accessible:", err);
+        alert("Please allow access to your camera and microphone.");
+        return; // Exit if permission is denied
+      }
+
+      // Get token from your Node.js backend
+      const response = await fetch(`/token?channel=${channel}&uid=${uid}`);
+      const { token } = await response.json();
+
+      // Join the channel with the token
+      await client.join(APP_ID, channel, token, uid);
+
+      // Create and play local camera track
+      try {
+        localTrack = await AgoraRTC.createCameraVideoTrack();
+        localTrack.play("local-stream");
+      } catch (error) {
+        console.error("Error creating camera track:", error);
+        alert("Camera not found. Please check your device settings.");
+        return; // Exit if camera track creation fails
+      }
+
+      // Publish local track to channel
+      await client.publish([localTrack]);
+
+      // Subscribe to remote users
+      client.on("user-published", async (user, mediaType) => {
+        await client.subscribe(user, mediaType);
+        if (mediaType === "video") {
+          const remoteTrack = user.videoTrack;
+          const remotePlayer = document.createElement("div");
+          remotePlayer.id = user.uid;
+          document.getElementById("remote-streams").appendChild(remotePlayer);
+          remoteTrack.play(remotePlayer);
+        }
+      });
+
+      client.on("user-unpublished", (user) => {
+        const remotePlayer = document.getElementById(user.uid);
+        if (remotePlayer) remotePlayer.remove();
+      });
+    };
+  </script>
+</body>
+</html>
