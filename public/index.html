@@ -45,11 +45,22 @@
 
       // Join the channel with the token
       await client.join(APP_ID, channel, token, uid);
+      console.log(`User ${uid} joined the channel: ${channel}`);
+
+      // Log user join on the server
+      await fetch('/join', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ channel, uid }),
+      });
 
       // Create and play local camera track
       try {
         localTrack = await AgoraRTC.createCameraVideoTrack();
         localTrack.play("local-stream");
+        console.log("Local video track is playing");
       } catch (error) {
         console.error("Error creating camera track:", error);
         alert("Camera not found. Please check your device settings.");
@@ -58,22 +69,29 @@
 
       // Publish local track to channel
       await client.publish([localTrack]);
+      console.log("Local track published");
 
       // Subscribe to remote users
       client.on("user-published", async (user, mediaType) => {
         await client.subscribe(user, mediaType);
+        console.log(`User ${user.uid} published ${mediaType}`);
+
         if (mediaType === "video") {
           const remoteTrack = user.videoTrack;
           const remotePlayer = document.createElement("div");
           remotePlayer.id = user.uid;
           document.getElementById("remote-streams").appendChild(remotePlayer);
           remoteTrack.play(remotePlayer);
+          console.log(`Remote video track is playing for user ${user.uid}`);
         }
       });
 
       client.on("user-unpublished", (user) => {
         const remotePlayer = document.getElementById(user.uid);
-        if (remotePlayer) remotePlayer.remove();
+        if (remotePlayer) {
+          remotePlayer.remove();
+          console.log(`User ${user.uid} has left the channel`);
+        }
       });
     };
   </script>
