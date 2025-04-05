@@ -163,162 +163,133 @@
 
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Agora Video Call</title>
-        <script
-            src="https://download.agora.io/sdk/release/AgoraRTC_N-4.11.0.js"></script>
-        <style>
-        #local-stream, #remote-streams > div {
-            width: 400px;
-            height: 300px;
-            border: 1px solid #000;
-            margin: 10px;
-        }
-        #remote-streams {
-            display: flex;
-            flex-wrap: wrap;
-        }
-    </style>
-    </head>
-    <body>
-        <button id="join">Join Call</button>
-        <div id="local-stream"></div>
-        <h3>Remote Streams</h3>
-        <div id="remote-streams"></div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Agora Video Call</title>
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.11.0.js"></script>
+  <style>
+    #controls {
+      margin-top: 10px;
+    }
+    #controls button {
+      margin-right: 10px;
+      padding: 10px;
+    }
+    #local-stream, .remote-video {
+      width: 400px;
+      height: 300px;
+      border: 1px solid #000;
+      margin: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="local-stream"></div>
+  <div id="remote-streams"></div>
+  <div id="controls">
+    <button id="join">Join Call</button>
+    <button id="leave" disabled>Leave Call</button>
+    <button id="toggle-mic" disabled>Mute Mic</button>
+    <button id="toggle-camera" disabled>Hide Camera</button>
+    <button id="share-screen" disabled>Share Screen</button>
+  </div>
 
-        <script>
-        const APP_ID = "e45b4a04aa0045a7ab86e68f56f6974c";
-        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
-        let localTrack;
+  <script>
+    const APP_ID = "e45b4a04aa0045a7ab86e68f56f6974c";
+    const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+    
+    let localAudioTrack, localVideoTrack, screenTrack;
+    let joined = false;
 
-        // document.getElementById('join').onclick = async () => {
-        //     const channel = "test";
-        //     const uid = Math.floor(Math.random() * 10000);
+    document.getElementById("join").onclick = async () => {
+      const channel = "test";
+      const uid = Math.floor(Math.random() * 10000);
+      const res = await fetch(`/token?channel=${channel}&uid=${uid}`);
+      const { token } = await res.json();
 
-        //     try {
-        //         await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        //         console.log("Media access granted");
-        //     } catch (err) {
-        //         alert("Camera/microphone access denied.");
-        //         return;
-        //     }
+      await client.join(APP_ID, channel, token, uid);
+      console.log(`User ${uid} joined`);
 
-        //     // Fetch token from server
-        //     const res = await fetch(`/token?channel=${channel}&uid=${uid}`);
-        //     const { token } = await res.json();
+      localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+      localVideoTrack = await AgoraRTC.createCameraVideoTrack();
 
-        //     // Join channel
-        //     await client.join(APP_ID, channel, token, uid);
-        //     console.log(`Joined channel ${channel} with UID ${uid}`);
+      await client.publish([localAudioTrack, localVideoTrack]);
+      localVideoTrack.play("local-stream");
 
-        //     // Notify server
-        //     await fetch('/join', {
-        //         method: 'POST',
-        //         headers: { 'Content-Type': 'application/json' },
-        //         body: JSON.stringify({ channel, uid }),
-        //     });
+      joined = true;
+      toggleControls(true);
 
-        //     // Create local track
-        //     localTrack = await AgoraRTC.createCameraVideoTrack();
-        //     localTrack.play("local-stream");
-        //     await client.publish([localTrack]);
-        //     console.log("Published local track");
+      // Subscribe to existing and new users
+      client.remoteUsers.forEach(subscribeToUser);
+      client.on("user-published", subscribeToUser);
+      client.on("user-unpublished", (user) => {
+        const el = document.getElementById(`remote-${user.uid}`);
+        if (el) el.remove();
+      });
+    };
 
-        //     // Subscribe to remote users
-        //     client.on("user-published", async (user, mediaType) => {
-        //         await client.subscribe(user, mediaType);
-        //         console.log(`Subscribed to ${mediaType} from user ${user.uid}`);
+    async function subscribeToUser(user) {
+      await client.subscribe(user, "video");
+      const remoteDiv = document.createElement("div");
+      remoteDiv.id = `remote-${user.uid}`;
+      remoteDiv.className = "remote-video";
+      document.getElementById("remote-streams").appendChild(remoteDiv);
+      user.videoTrack.play(remoteDiv);
+      user.audioTrack?.play();
+    }
 
-        //         if (mediaType === "video") {
-        //             const remotePlayer = document.createElement("div");
-        //             remotePlayer.id = `remote-${user.uid}`;
-        //             remotePlayer.style.width = "400px";
-        //             remotePlayer.style.height = "300px";
-        //             document.getElementById("remote-streams").appendChild(remotePlayer);
-        //             user.videoTrack.play(remotePlayer);
-        //         }
+    document.getElementById("leave").onclick = async () => {
+      if (!joined) return;
+      await client.unpublish([localAudioTrack, localVideoTrack]);
+      localAudioTrack.close();
+      localVideoTrack.close();
+      if (screenTrack) {
+        await client.unpublish([screenTrack]);
+        screenTrack.close();
+      }
+      await client.leave();
+      document.getElementById("local-stream").innerHTML = "";
+      document.getElementById("remote-streams").innerHTML = "";
+      toggleControls(false);
+      joined = false;
+    };
 
-        //         if (mediaType === "audio") {
-        //             user.audioTrack.play();
-        //         }
-        //     });
+    document.getElementById("toggle-mic").onclick = () => {
+      if (!localAudioTrack) return;
+      const isEnabled = localAudioTrack.isEnabled;
+      localAudioTrack.setEnabled(!isEnabled);
+      document.getElementById("toggle-mic").innerText = isEnabled ? "Unmute Mic" : "Mute Mic";
+    };
 
-        //     client.on("user-unpublished", (user) => {
-        //         const remoteDiv = document.getElementById(`remote-${user.uid}`);
-        //         if (remoteDiv) remoteDiv.remove();
-        //         console.log(`User ${user.uid} unpublished`);
-        //     });
+    document.getElementById("toggle-camera").onclick = () => {
+      if (!localVideoTrack) return;
+      const isEnabled = localVideoTrack.isEnabled;
+      localVideoTrack.setEnabled(!isEnabled);
+      document.getElementById("toggle-camera").innerText = isEnabled ? "Show Camera" : "Hide Camera";
+    };
 
-        //     client.on("user-joined", (user) => {
-        //         console.log(`Remote user joined: ${user.uid}`);
-        //     });
-        // };
+    document.getElementById("share-screen").onclick = async () => {
+      if (screenTrack) {
+        await client.unpublish([screenTrack]);
+        screenTrack.close();
+        screenTrack = null;
+        document.getElementById("share-screen").innerText = "Share Screen";
+        return;
+      }
 
-        document.getElementById('join').onclick = async () => {
-            const channel = "test";
-            const uid = Math.floor(Math.random() * 10000);
+      screenTrack = await AgoraRTC.createScreenVideoTrack();
+      await client.publish([screenTrack]);
+      screenTrack.play("local-stream");
+      document.getElementById("share-screen").innerText = "Stop Sharing";
+    };
 
-            try {
-                await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            } catch (err) {
-                alert("Camera/microphone access denied.");
-                return;
-            }
-
-            const res = await fetch(`/token?channel=${channel}&uid=${uid}`);
-            const { token } = await res.json();
-
-            await client.join(APP_ID, channel, token, uid);
-            console.log(`Joined channel ${channel} with UID ${uid}`);
-
-            await fetch('/join', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ channel, uid }),
-            });
-
-            localTrack = await AgoraRTC.createCameraVideoTrack();
-            localTrack.play("local-stream");
-            await client.publish([localTrack]);
-
-            // 🔥 Handle users who are already in the channel
-            client.remoteUsers.forEach(async (user) => {
-                await client.subscribe(user, "video");
-                const remotePlayer = document.createElement("div");
-                remotePlayer.id = `remote-${user.uid}`;
-                remotePlayer.style.width = "400px";
-                remotePlayer.style.height = "300px";
-                document.getElementById("remote-streams").appendChild(remotePlayer);
-                user.videoTrack?.play(remotePlayer);
-            });
-
-            // Handle newly published users
-            client.on("user-published", async (user, mediaType) => {
-                await client.subscribe(user, mediaType);
-                console.log(`Subscribed to ${mediaType} from user ${user.uid}`);
-
-                if (mediaType === "video") {
-                    const remotePlayer = document.createElement("div");
-                    remotePlayer.id = `remote-${user.uid}`;
-                    remotePlayer.style.width = "400px";
-                    remotePlayer.style.height = "300px";
-                    document.getElementById("remote-streams").appendChild(remotePlayer);
-                    user.videoTrack?.play(remotePlayer);
-                }
-
-                if (mediaType === "audio") {
-                    user.audioTrack?.play();
-                }
-            });
-
-            client.on("user-unpublished", (user) => {
-                const remoteDiv = document.getElementById(`remote-${user.uid}`);
-                if (remoteDiv) remoteDiv.remove();
-            });
-        };
-
-    </script>
-    </body>
+    function toggleControls(enabled) {
+      ["leave", "toggle-mic", "toggle-camera", "share-screen"].forEach(id => {
+        document.getElementById(id).disabled = !enabled;
+      });
+      document.getElementById("join").disabled = enabled;
+    }
+  </script>
+</body>
 </html>
