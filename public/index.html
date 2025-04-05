@@ -1,3 +1,166 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Agora Video Call</title>
+        <script
+            src="https://download.agora.io/sdk/release/AgoraRTC_N-4.11.0.js"></script>
+        <style>
+        #local-stream, #remote-streams > div {
+            width: 400px;
+            height: 300px;
+            border: 1px solid #000;
+            margin: 10px;
+        }
+        #remote-streams {
+            display: flex;
+            flex-wrap: wrap;
+        }
+    </style>
+    </head>
+    <body>
+        <button id="join">Join Call</button>
+        <div id="local-stream"></div>
+        <h3>Remote Streams</h3>
+        <div id="remote-streams"></div>
+
+        <script>
+        const APP_ID = "e45b4a04aa0045a7ab86e68f56f6974c";
+        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+        let localTrack;
+
+        // document.getElementById('join').onclick = async () => {
+        //     const channel = "test";
+        //     const uid = Math.floor(Math.random() * 10000);
+
+        //     try {
+        //         await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        //         console.log("Media access granted");
+        //     } catch (err) {
+        //         alert("Camera/microphone access denied.");
+        //         return;
+        //     }
+
+        //     // Fetch token from server
+        //     const res = await fetch(`/token?channel=${channel}&uid=${uid}`);
+        //     const { token } = await res.json();
+
+        //     // Join channel
+        //     await client.join(APP_ID, channel, token, uid);
+        //     console.log(`Joined channel ${channel} with UID ${uid}`);
+
+        //     // Notify server
+        //     await fetch('/join', {
+        //         method: 'POST',
+        //         headers: { 'Content-Type': 'application/json' },
+        //         body: JSON.stringify({ channel, uid }),
+        //     });
+
+        //     // Create local track
+        //     localTrack = await AgoraRTC.createCameraVideoTrack();
+        //     localTrack.play("local-stream");
+        //     await client.publish([localTrack]);
+        //     console.log("Published local track");
+
+        //     // Subscribe to remote users
+        //     client.on("user-published", async (user, mediaType) => {
+        //         await client.subscribe(user, mediaType);
+        //         console.log(`Subscribed to ${mediaType} from user ${user.uid}`);
+
+        //         if (mediaType === "video") {
+        //             const remotePlayer = document.createElement("div");
+        //             remotePlayer.id = `remote-${user.uid}`;
+        //             remotePlayer.style.width = "400px";
+        //             remotePlayer.style.height = "300px";
+        //             document.getElementById("remote-streams").appendChild(remotePlayer);
+        //             user.videoTrack.play(remotePlayer);
+        //         }
+
+        //         if (mediaType === "audio") {
+        //             user.audioTrack.play();
+        //         }
+        //     });
+
+        //     client.on("user-unpublished", (user) => {
+        //         const remoteDiv = document.getElementById(`remote-${user.uid}`);
+        //         if (remoteDiv) remoteDiv.remove();
+        //         console.log(`User ${user.uid} unpublished`);
+        //     });
+
+        //     client.on("user-joined", (user) => {
+        //         console.log(`Remote user joined: ${user.uid}`);
+        //     });
+        // };
+
+        document.getElementById('join').onclick = async () => {
+            const channel = "test";
+            const uid = Math.floor(Math.random() * 10000);
+
+            try {
+                await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            } catch (err) {
+                alert("Camera/microphone access denied.");
+                return;
+            }
+
+            const res = await fetch(`/token?channel=${channel}&uid=${uid}`);
+            const { token } = await res.json();
+
+            await client.join(APP_ID, channel, token, uid);
+            console.log(`Joined channel ${channel} with UID ${uid}`);
+
+            await fetch('/join', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channel, uid }),
+            });
+
+            localTrack = await AgoraRTC.createCameraVideoTrack();
+            localTrack.play("local-stream");
+            await client.publish([localTrack]);
+
+            // 🔥 Handle users who are already in the channel
+            client.remoteUsers.forEach(async (user) => {
+                await client.subscribe(user, "video");
+                const remotePlayer = document.createElement("div");
+                remotePlayer.id = `remote-${user.uid}`;
+                remotePlayer.style.width = "400px";
+                remotePlayer.style.height = "300px";
+                document.getElementById("remote-streams").appendChild(remotePlayer);
+                user.videoTrack?.play(remotePlayer);
+            });
+
+            // Handle newly published users
+            client.on("user-published", async (user, mediaType) => {
+                await client.subscribe(user, mediaType);
+                console.log(`Subscribed to ${mediaType} from user ${user.uid}`);
+
+                if (mediaType === "video") {
+                    const remotePlayer = document.createElement("div");
+                    remotePlayer.id = `remote-${user.uid}`;
+                    remotePlayer.style.width = "400px";
+                    remotePlayer.style.height = "300px";
+                    document.getElementById("remote-streams").appendChild(remotePlayer);
+                    user.videoTrack?.play(remotePlayer);
+                }
+
+                if (mediaType === "audio") {
+                    user.audioTrack?.play();
+                }
+            });
+
+            client.on("user-unpublished", (user) => {
+                const remoteDiv = document.getElementById(`remote-${user.uid}`);
+                if (remoteDiv) remoteDiv.remove();
+            });
+        };
+
+    </script>
+    </body>
+</html> -->
+
+
 <!DOCTYPE html>
 <html lang="en">
     <head>
